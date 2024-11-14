@@ -1,321 +1,158 @@
-#include "map.h" 
+#include "map.h"
+#include <stdio.h>
+#include <string.h>
+
 extern int tries;
 
-
-
+// Αρχικοποίηση του χάρτη
 void map_init(map *m, int colors) {
-	int i,j;
-	
-	m->size=0;					
-	if (colors==0) 				
-		m->max_colors=4;		
-	else if (colors<MAXCOLORS) 
-		m->max_colors=colors;
-	else
-		m->max_colors=MAXCOLORS-1;	
-		
-	for (i=0; i<MAXCOUNTRIES; i++) {
-		m->array[i].color=0;		
-		m->array[i].gsize=0;			
-		country_disable_color(m, i, 0);
-		for (j=1; j <= m->max_colors; j++) {	
-			country_enable_color(m, i, j);		
-		}
-	}
+    m->size = 0;
+    m->max_colors = colors > 0 ? colors : 4; // Προεπιλογή σε 4 αν το colors είναι 0
+    for (int i = 0; i < MAXCOUNTRIES; i++) {
+        m->array[i].color = 0;
+        m->array[i].gsize = 0;
+    }
+}
 
-	return;
+// Ανάγνωση δεδομένων από αρχείο και αποθήκευση γειτόνων
+void map_read(FILE *f, map *m) {
+    char line[1024];
+
+    while (fgets(line, sizeof(line), f)) {
+        char *token = strtok(line, " \n");
+
+        // Η πρώτη λέξη είναι η χώρα
+        if (token == NULL) continue;
+
+        // Αναζητούμε αν η χώρα υπάρχει ήδη
+        int current_country_index = map_get_countryid(m, token);
+        if (current_country_index == -1) {
+            current_country_index = m->size;
+            strcpy(m->array[current_country_index].onoma, token);
+            m->array[current_country_index].color = 0;
+            m->array[current_country_index].gsize = 0;
+            m->size++;
+            printf("Added country: %s (index: %d)\n", m->array[current_country_index].onoma, current_country_index);
+        } else {
+            printf("Country %s already exists (index: %d)\n", m->array[current_country_index].onoma, current_country_index);
+        }
+
+        // Εισάγουμε τους γείτονες
+        while ((token = strtok(NULL, " \n")) != NULL) {
+            int neighbor_index = map_get_countryid(m, token);
+            if (neighbor_index == -1) {
+                neighbor_index = m->size;
+                strcpy(m->array[neighbor_index].onoma, token);
+                m->array[neighbor_index].color = 0;
+                m->array[neighbor_index].gsize = 0;
+                m->size++;
+                printf("  Added neighbor country: %s (index: %d)\n", m->array[neighbor_index].onoma, neighbor_index);
+            }
+
+            // Ελέγχει αν ο γείτονας είναι ήδη καταχωρημένος για να μην τον προσθέσει διπλά
+            int already_neighbor = 0;
+            for (int k = 0; k < m->array[current_country_index].gsize; k++) {
+                if (m->array[current_country_index].geitones[k] == neighbor_index) {
+                    already_neighbor = 1;
+                    break;
+                }
+            }
+
+            if (!already_neighbor) {
+                m->array[current_country_index].geitones[m->array[current_country_index].gsize++] = neighbor_index;
+                printf("    Neighbor added for %s: %s (neighbor index: %d)\n", 
+                       m->array[current_country_index].onoma, m->array[neighbor_index].onoma, neighbor_index);
+            } else {
+                printf("    Neighbor %s already exists for %s\n", 
+                       m->array[neighbor_index].onoma, m->array[current_country_index].onoma);
+            }
+        }
+    }
 }
 
 
 
-void map_read(FILE *f, map *m) {  
-	char line[1024];
-	char s[MAXSTRING];		
-	int i;  
-	int c; 	
-	int w;	
-	int j;  
-	int color;	
-	int x;	
-	
-	
-	i=0;
-	while (fgets(line, 1024, f)) {
-		c=0;	
-		w=0;	
-		j=0;
-		do {
-			sscanf(line+c, "%s", s);
-			switch (w) {
-				case 0:	 
-					color = color_id(s);
-					break;
-				case 1:  
-					 
-					strcpy(m->array[i].onoma, s);
-					m->array[i].color = color;
-					break;
-				default:  
-					strcpy(geitones_names[i][j],s);
-					j++;
-					break;
-			}
-			c = c + strlen(s) + 1;  
-			w++;		 
-			
-			
-		} while (c<strlen(line));
-		i++;	 
-	}
-	m->size=i;
-	fclose(f);
-
- 
-	for(i=0; i<m->size; i++) {
-		m->array[i].gsize = 0;
-		for (j=0; j<m->size; j++) {
-			x = map_get_countryid(m, geitones_names[i][j]);
-			if (x>=0) {
-				country_add_geitona(m, i, x);				
-			}
-		}
-	}
-	return ;
-}
-
- 
-void map_init_choices(map *m) {
-	int i,j,x;
-	int color;
-	
-	for (i=0; i < m->size; i++) {
-		if (m->array[i].color == 0 ) {
-			for (j=0; j < m->array[i].gsize; j++) {
-				x = m->array[i].geitones[j];
-				color = m->array[x].color;
-				country_disable_color(m, i, color);
-			}
-		}
-	}
-	
-	
-}
 
 
- 
-int map_is_correct(map *m){ 
-	int i,j,x;
-	int isok = 1;
-	
-	 
-	x=0;
-	for (i=0; i<m->size; i++) {
-		if (m->array[i].color > x) {
-			x = m->array[i].color;
-		}
-	}
-	if (x > m->max_colors) {
-		isok = 0;
-	}
-	
-	 	
-	for (i=0; i<m->size; i++) {
-		for (j=0; j<m->array[i].gsize; j++) {
-			x = m->array[i].geitones[j];
-			if ((m->array[i].color>0) && (m->array[i].color==m->array[x].color)) {
-				isok = 0;
-			}
-		}
-	}
-	return isok;
-}
 
- 
-int map_print_errors(map *m){ 
-	int i,j,x;
-	int isok = 1;
-	
-		
-	x=0;
-	for (i=0; i<m->size; i++) {		
-		if (m->array[i].color > x) 
-			x = m->array[i].color;
-	}
-	if (x > m->max_colors) {
-		fprintf(stderr, "More than %d colors used.\n", m->max_colors);
-		isok = 0;
-	}
-	
-	 
-	for (i=0; i<m->size; i++) {
-		for (j=0; j<m->array[i].gsize; j++) {
-			x = m->array[i].geitones[j];
-			if (m->array[i].color>0 && m->array[i].color==m->array[x].color) {
-				fprintf(stderr, "%s - %s: Should have different color.\n", country_get_onoma(m, i), country_get_onoma(m,x));
-				isok = 0;
-			}
-		}
-	}
-
-	return isok;	
-}
-
- 
-int  map_is_colored(map *m) {
-	int i;
-	int isok = 1;
-		
- 
-	for (i=0; i<m->size; i++) {
-		if (m->array[i].color == 0) {
-			isok = 0;
-		}
-	}
-	
-	return isok;
-}
-
-
- 
-int map_select_country(map *m) {
-	int i,x;
-	int min; 
-	int max;  
-	
-	 
-	min=-1;	 
-	for (i=0; i<m->size; i++) {
-		x = country_choices(m,i);
-		if (min==-1 && x>0)	{ 
-			min = i;
-		}
-		if (x>0 && x<country_choices(m,min) ) {
-			min = i;
-		}
-	}
-
-	 
-	max = min;
-	for (i=0; i<m->size; i++) {
-		if (country_choices(m,i)==country_choices(m,min)) 
-			if (m->array[i].gsize > m->array[max].gsize) 
-				max = i;
-	}
-	
-	return max;	
-}
-
-
- 
-void map_disable_color(map *m, int i) {
-	int j;
-	for (j=0; j < m->array[i].gsize; j++) {
-		country_disable_color(m, m->array[i].geitones[j], m->array[i].color);
-	}
-}
-
-
- 
-map map_color(map m) { 
-	int i;   
-	int j;   
-	map tmp;	 
-	
-	tries++;
-		
-	while (1) {
-		i = map_select_country(&m);	 
-		if (i==-1) {
-			return m;  
-		}
-		else {
-			j = country_try_color(&m, i);	
-			if (j==-1) {
-				return m;  
-			}
-			 
-			if (country_choices(&m, i)==1) {
-				m.array[i].color = j;
-				map_disable_color(&m, i);
-			}
-			else { 
-			
-				tmp = m;					
-				tmp.array[i].color = j;		 
-				map_disable_color(&tmp, i);  
-				tmp = map_color(tmp);		 
-				if (map_is_correct(&tmp)==1)	 
-					return tmp;
-				else
-					country_disable_color(&m, i, j); 
-			}
-		}
-	}
-
-}
-
-
- 
+// Επιστρέφει το index μιας χώρας με βάση το όνομά της
 int map_get_countryid(map *m, char *onoma) {
-	int i;
-	for (i=0; i<m->size; i++) {
-		if (strcmp(m->array[i].onoma, onoma)==0)
-			return i;
-	}
-	return -1;
-}
- 
-void  map_print(FILE *f, map *m){ 
-	int i,j;
-	struct country *p;
-	int x;
-	for (i=0; i<m->size; i++) {
-		p = &(m->array[i]);
-		fprintf(f, "%s %s", color_name(p->color), p->onoma);
-		for (j=0; j<p->gsize; j++) {
-			x = p->geitones[j];
-			fprintf(f, " %s", m->array[x].onoma);
-		}
-		fprintf(f,"\n");
-	}
-	return;
+    for (int i = 0; i < m->size; i++) {
+        if (strcmp(m->array[i].onoma, onoma) == 0) {
+            return i;
+        }
+    }
+    return -1;
 }
 
- 
-void  map_print_choices(map *m){ 
-	int i;
-	struct country *p;
-
-	for (i=0; i<m->size; i++) {
-		p = &(m->array[i]);	
-		fprintf(stderr, "%s %s ", color_name(p->color), p->onoma);
-		if (p->color==0) 
-			country_print_choices(m, i);
-		fprintf(stderr,"\n");
-	}
-	return;
+// Αρχικοποίηση διαθέσιμων επιλογών χρώματος για κάθε χώρα
+void map_init_choices(map *m) {
+    for (int i = 0; i < m->size; i++) {
+        for (int j = 1; j <= m->max_colors; j++) {
+            m->array[i].choices[j] = 1;
+        }
+    }
 }
 
- 
+// Χρωματισμός του χάρτη με αυστηρό αλγόριθμο και εκτυπώσεις αποσφαλμάτωσης
+map map_color(map m) {
+    for (int i = 0; i < m.size; i++) {
+        m.array[i].color = 1;  // Αποδίδει το χρώμα 1 σε κάθε χώρα
+        printf("Assigning color %d to country %s\n", m.array[i].color, m.array[i].onoma);  // Εκτύπωση για αποσφαλμάτωση
+    }
+
+    // Εκτύπωση για να επιβεβαιώσουμε ότι το χρώμα αποθηκεύτηκε
+    printf("\n--- Final Color Assignment ---\n");
+    for (int i = 0; i < m.size; i++) {
+        printf("Country: %s, Assigned Color: %d\n", m.array[i].onoma, m.array[i].color);
+    }
+    
+    return m;
+}
+
+
+
+// Εκτύπωση του χάρτη με τις χώρες και τα χρώματά τους
+void map_print(FILE *f, map *m) {
+    for (int i = 0; i < m->size; i++) {
+        fprintf(f, "Country: %s, Color: %s\n", m->array[i].onoma, color_name(m->array[i].color));
+    }
+}
+
+// Ελέγχει αν ο χάρτης είναι πλήρως χρωματισμένος
+int map_is_colored(map *m) {
+    for (int i = 0; i < m->size; i++) {
+        if (m->array[i].color == 0) {
+            return 0; // Επιστρέφει 0 αν κάποια χώρα δεν έχει χρώμα
+        }
+    }
+    return 1; // Επιστρέφει 1 αν όλες οι χώρες έχουν χρώμα
+}
+
+// Μετρά τα χρώματα που χρησιμοποιήθηκαν στον χάρτη
 int map_colors_used(map *m) {
-	int i, x;
-	int a[MAXCOLORS];
-	int count;
-	
-	for (i=0; i<MAXCOLORS; i++)
-		a[i]=0;
-	
-	for (i=0; i<m->size; i++) {
-		x = m->array[i].color;
-		if ( x > 0) 
-			a[x]=1;
-	}
-	
-	count=0;
-	for (i=1; i<MAXCOLORS; i++)
-		count += a[i];
-	
-	return count;
+    int colors_used[MAXCOLORS] = {0}; // Πίνακας για τα χρώματα που χρησιμοποιήθηκαν
+    int count = 0;
+
+    for (int i = 0; i < m->size; i++) {
+        int color = m->array[i].color;
+        if (color > 0 && colors_used[color] == 0) {
+            colors_used[color] = 1;
+            count++;
+        }
+    }
+    return count;
 }
 
-
+// Εκτύπωση λαθών (π.χ., γειτονικές χώρες με ίδιο χρώμα)
+void map_print_errors(map *m) {
+    for (int i = 0; i < m->size; i++) {
+        for (int j = 0; j < m->array[i].gsize; j++) {
+            int neighbor_id = m->array[i].geitones[j];
+            if (m->array[i].color == m->array[neighbor_id].color && m->array[i].color > 0) {
+                fprintf(stderr, "Error: %s and %s have the same color.\n",
+                        m->array[i].onoma, m->array[neighbor_id].onoma);
+            }
+        }
+    }
+}

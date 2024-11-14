@@ -1,9 +1,10 @@
-#include <stdio.h>
-#include <string.h>
+#ifndef COLOR_H
+#define COLOR_H
+
 #define MAXCOLORS 11
 
-extern char *colorstr[11];
- 
-int color_id(char *colorname) ;
-
+extern char *colorstr[MAXCOLORS];
+int color_id(char *colorname);
 char *color_name(int i);
+
+#endif // COLOR_H
