@@ -14,7 +14,6 @@ This project is a map coloring tool that reads data about countries and their ne
 
 To compile the project, run:
 
-```bash
 make
 
 To run the program, use the following command:
